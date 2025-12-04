@@ -811,11 +811,10 @@ class EmrCreateJobFlowOperator(AwsBaseOperator[EmrHook]):
         """Terminate the EMR cluster (job flow) unless TerminationProtected is enabled on the cluster."""
         if self._job_flow_id:
             # Check if cluster is already in a terminal state before attempting to terminate
-            terminal_states = ["TERMINATED", "TERMINATED_WITH_ERRORS"]
             try:
                 cluster_response = self.hook.conn.describe_cluster(ClusterId=self._job_flow_id)
                 cluster_state = cluster_response["Cluster"]["Status"]["State"]
-                if cluster_state in terminal_states:
+                if cluster_state in EmrHook.CLUSTER_TERMINAL_STATES:
                     self.log.info(
                         "Cluster %s is already in terminal state %s, skipping termination",
                         self._job_flow_id,

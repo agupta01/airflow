@@ -48,6 +48,8 @@ class EmrHook(AwsBaseHook):
         :class:`~airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
     """
 
+    CLUSTER_TERMINAL_STATES = ["TERMINATED", "TERMINATED_WITH_ERRORS"]
+
     conn_name_attr = "emr_conn_id"
     default_conn_name = "emr_default"
     conn_type = "emr"
