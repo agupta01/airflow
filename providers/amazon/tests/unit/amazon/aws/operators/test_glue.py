@@ -317,6 +317,32 @@ class TestGlueJobOperator:
             JobRunIds=[JOB_RUN_ID],
         )
 
+    @mock.patch.object(GlueJobHook, "get_job_state", return_value="SUCCEEDED")
+    @mock.patch.object(GlueJobHook, "conn")
+    @mock.patch.object(GlueJobHook, "get_conn")
+    def test_killed_with_terminal_state(
+        self,
+        _,
+        mock_glue_hook,
+        mock_get_job_state,
+    ):
+        """Test that on_kill does not attempt to stop a job already in terminal state."""
+        glue = GlueJobOperator(
+            task_id=TASK_ID,
+            job_name=JOB_NAME,
+            script_location="s3://folder/file",
+            aws_conn_id="aws_default",
+            region_name="us-west-2",
+            s3_bucket="some_bucket",
+            iam_role_name="my_test_role",
+            stop_job_run_on_kill=True,
+        )
+        glue._job_run_id = JOB_RUN_ID
+        glue.on_kill()
+        mock_get_job_state.assert_called_once_with(JOB_NAME, JOB_RUN_ID)
+        # batch_stop_job_run should not be called since job is already in terminal state
+        mock_glue_hook.batch_stop_job_run.assert_not_called()
+
     @mock.patch.object(GlueJobHook, "get_job_state")
     @mock.patch.object(GlueJobHook, "initialize_job")
     @mock.patch.object(GlueJobHook, "get_conn")
