@@ -277,6 +277,21 @@ class GlueJobOperator(AwsBaseOperator[GlueJobHook]):
     def on_kill(self):
         """Cancel the running AWS Glue Job."""
         if self.stop_job_run_on_kill:
+            # Check if job is already in a terminal state before attempting to stop
+            terminal_states = ["FAILED", "TIMEOUT", "SUCCEEDED", "STOPPED"]
+            try:
+                job_state = self.hook.get_job_state(self.job_name, self._job_run_id)
+                if job_state in terminal_states:
+                    self.log.info(
+                        "Glue Job %s with Run Id %s is already in terminal state %s, skipping stop request",
+                        self.job_name,
+                        self._job_run_id,
+                        job_state,
+                    )
+                    return
+            except Exception as ex:
+                self.log.warning("Failed to get job state, attempting stop anyway: %s", ex)
+
             self.log.info("Stopping AWS Glue Job: %s. Run Id: %s", self.job_name, self._job_run_id)
             response = self.hook.conn.batch_stop_job_run(
                 JobName=self.job_name,
