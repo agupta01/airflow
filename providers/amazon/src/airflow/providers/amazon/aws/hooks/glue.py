@@ -67,6 +67,10 @@ class GlueJobHook(AwsBaseHook):
         - :class:`airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
     """
 
+    JOB_FAILURE_STATES = ["FAILED", "TIMEOUT"]
+    JOB_SUCCESS_STATES = ["SUCCEEDED", "STOPPED"]
+    JOB_TERMINAL_STATES = JOB_FAILURE_STATES + JOB_SUCCESS_STATES
+
     class LogContinuationTokens:
         """Used to hold the continuation tokens when reading logs from both streams Glue Jobs write to."""
 
@@ -417,8 +421,8 @@ class GlueJobHook(AwsBaseHook):
         next_log_tokens: GlueJobHook.LogContinuationTokens,
     ) -> dict | None:
         """Process Glue Job state while polling; used by both sync and async methods."""
-        failed_states = ["FAILED", "TIMEOUT"]
-        finished_states = ["SUCCEEDED", "STOPPED"]
+        failed_states = self.JOB_FAILURE_STATES
+        finished_states = self.JOB_SUCCESS_STATES
 
         if verbose:
             self.print_job_logs(

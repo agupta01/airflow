@@ -764,6 +764,32 @@ class TestEmrServerlessStartJobOperator:
             jobRunId=id,
         )
 
+    @mock.patch.object(EmrServerlessHook, "conn")
+    def test_cancel_job_run_with_terminal_state(self, mock_conn):
+        """Test that on_kill does not attempt to cancel a job already in terminal state."""
+        mock_conn.get_application.return_value = {"application": {"state": "STARTED"}}
+        mock_conn.start_job_run.return_value = {
+            "jobRunId": job_run_id,
+            "ResponseMetadata": {"HTTPStatusCode": 200},
+        }
+        # Job is already in SUCCESS terminal state
+        mock_conn.get_job_run.return_value = {"jobRun": {"state": "SUCCESS"}}
+
+        operator = EmrServerlessStartJobOperator(
+            task_id=task_id,
+            client_request_token=client_request_token,
+            application_id=application_id,
+            execution_role_arn=execution_role_arn,
+            job_driver=job_driver,
+            configuration_overrides=configuration_overrides,
+            wait_for_completion=False,
+        )
+
+        id = operator.execute(self.mock_context)
+        operator.on_kill()
+        # cancel_job_run should not be called since job is already in terminal state
+        mock_conn.cancel_job_run.assert_not_called()
+
     @pytest.mark.parametrize(
         ("waiter_delay", "waiter_max_attempts", "expected"),
         [

@@ -265,3 +265,34 @@ class TestEmrCreateJobFlowOperator:
                 task_id=TASK_ID,
                 wait_policy=WaitPolicy.WAIT_FOR_COMPLETION,
             )
+
+    def test_on_kill_with_running_cluster(self, mocked_hook_client):
+        """Test that on_kill attempts to terminate a cluster in running state."""
+        mocked_hook_client.run_job_flow.return_value = RUN_JOB_FLOW_SUCCESS_RETURN
+        mocked_hook_client.describe_cluster.return_value = {
+            "Cluster": {"Status": {"State": "RUNNING"}}
+        }
+
+        self.operator.execute(self.mock_context)
+        self.operator.on_kill()
+
+        # describe_cluster is called twice: once in execute() via get_log_uri(), once in on_kill()
+        assert mocked_hook_client.describe_cluster.call_count == 2
+        mocked_hook_client.describe_cluster.assert_called_with(ClusterId=JOB_FLOW_ID)
+        mocked_hook_client.terminate_job_flows.assert_called_once_with(JobFlowIds=[JOB_FLOW_ID])
+
+    def test_on_kill_with_terminated_cluster(self, mocked_hook_client):
+        """Test that on_kill does not attempt to terminate a cluster already in terminal state."""
+        mocked_hook_client.run_job_flow.return_value = RUN_JOB_FLOW_SUCCESS_RETURN
+        mocked_hook_client.describe_cluster.return_value = {
+            "Cluster": {"Status": {"State": "TERMINATED"}}
+        }
+
+        self.operator.execute(self.mock_context)
+        self.operator.on_kill()
+
+        # describe_cluster is called twice: once in execute() via get_log_uri(), once in on_kill()
+        assert mocked_hook_client.describe_cluster.call_count == 2
+        mocked_hook_client.describe_cluster.assert_called_with(ClusterId=JOB_FLOW_ID)
+        # terminate_job_flows should not be called since cluster is already terminated
+        mocked_hook_client.terminate_job_flows.assert_not_called()

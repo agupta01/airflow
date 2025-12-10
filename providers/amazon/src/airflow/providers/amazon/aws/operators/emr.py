@@ -611,6 +611,19 @@ class EmrContainerOperator(AwsBaseOperator[EmrContainerHook]):
     def on_kill(self) -> None:
         """Cancel the submitted job run."""
         if self.job_id:
+            # Check if job is already in a terminal state before attempting to cancel
+            try:
+                job_state = self.hook.check_query_status(self.job_id)
+                if job_state in EmrContainerHook.TERMINAL_STATES:
+                    self.log.info(
+                        "Job run %s is already in terminal state %s, skipping cancellation",
+                        self.job_id,
+                        job_state,
+                    )
+                    return
+            except Exception as ex:
+                self.log.warning("Failed to get job run state, attempting cancellation anyway: %s", ex)
+
             self.log.info("Stopping job run with jobId - %s", self.job_id)
             response = self.hook.stop_query(self.job_id)
             http_status_code = None
@@ -797,6 +810,20 @@ class EmrCreateJobFlowOperator(AwsBaseOperator[EmrHook]):
     def on_kill(self) -> None:
         """Terminate the EMR cluster (job flow) unless TerminationProtected is enabled on the cluster."""
         if self._job_flow_id:
+            # Check if cluster is already in a terminal state before attempting to terminate
+            try:
+                cluster_response = self.hook.conn.describe_cluster(ClusterId=self._job_flow_id)
+                cluster_state = cluster_response["Cluster"]["Status"]["State"]
+                if cluster_state in EmrHook.CLUSTER_TERMINAL_STATES:
+                    self.log.info(
+                        "Cluster %s is already in terminal state %s, skipping termination",
+                        self._job_flow_id,
+                        cluster_state,
+                    )
+                    return
+            except Exception as ex:
+                self.log.warning("Failed to get cluster state, attempting termination anyway: %s", ex)
+
             self.log.info("Terminating job flow %s", self._job_flow_id)
             self.hook.conn.terminate_job_flows(JobFlowIds=[self._job_flow_id])
 
@@ -1301,6 +1328,22 @@ class EmrServerlessStartJobOperator(AwsBaseOperator[EmrServerlessHook]):
         Note: this method will not run in deferrable mode.
         """
         if self.job_id:
+            # Check if job is already in a terminal state before attempting to cancel
+            try:
+                job_run_response = self.hook.conn.get_job_run(
+                    applicationId=self.application_id, jobRunId=self.job_id
+                )
+                job_state = job_run_response["jobRun"]["state"]
+                if job_state in EmrServerlessHook.JOB_TERMINAL_STATES:
+                    self.log.info(
+                        "Job run %s is already in terminal state %s, skipping cancellation",
+                        self.job_id,
+                        job_state,
+                    )
+                    return
+            except Exception as ex:
+                self.log.warning("Failed to get job run state, attempting cancellation anyway: %s", ex)
+
             self.log.info("Stopping job run with jobId - %s", self.job_id)
             response = self.hook.conn.cancel_job_run(applicationId=self.application_id, jobRunId=self.job_id)
             http_status_code = (

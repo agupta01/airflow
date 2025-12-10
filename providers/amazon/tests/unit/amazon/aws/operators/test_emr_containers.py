@@ -162,6 +162,32 @@ class TestEmrContainerOperator:
         assert trigger.waiter_delay == self.emr_container.poll_interval
         assert trigger.attempts == self.emr_container.max_polling_attempts
 
+    @mock.patch.object(EmrContainerHook, "check_query_status", return_value="RUNNING")
+    @mock.patch.object(EmrContainerHook, "stop_query")
+    @mock.patch.object(EmrContainerHook, "poll_query_status")
+    def test_on_kill_with_running_job(self, mock_poll, mock_stop, mock_check):
+        """Test that on_kill attempts to cancel a job in running state."""
+        self.emr_container.job_id = "job123456"
+        mock_stop.return_value = {"ResponseMetadata": {"HTTPStatusCode": 200}}
+
+        self.emr_container.on_kill()
+
+        mock_check.assert_called_once_with("job123456")
+        mock_stop.assert_called_once_with("job123456")
+        mock_poll.assert_called_once_with("job123456")
+
+    @mock.patch.object(EmrContainerHook, "check_query_status", return_value="COMPLETED")
+    @mock.patch.object(EmrContainerHook, "stop_query")
+    def test_on_kill_with_terminal_state(self, mock_stop, mock_check):
+        """Test that on_kill does not attempt to cancel a job already in terminal state."""
+        self.emr_container.job_id = "job123456"
+
+        self.emr_container.on_kill()
+
+        mock_check.assert_called_once_with("job123456")
+        # stop_query should not be called since job is already in terminal state
+        mock_stop.assert_not_called()
+
 
 class TestEmrEksCreateClusterOperator:
     def setup_method(self):
